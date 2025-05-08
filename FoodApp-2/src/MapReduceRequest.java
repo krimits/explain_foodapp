@@ -1,25 +1,32 @@
+// MapReduceRequest.java
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class MapReduceRequest implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private double clientLatitude;
     private double clientLongitude;
     private ArrayList<String> foodCategories;
-    private double minStars;
+    private int minStars;
     private String priceCategory;
     private double radius;
 
 
-    public MapReduceRequest(double clientLatitude, double clientLongitude, ArrayList<String> foodCategories, double minStars, String priceCategory, double radius) {
+    public MapReduceRequest() {
+        // Default constructor with no parameters
+        this.foodCategories = new ArrayList<>();
+    }
+
+
+    public MapReduceRequest(double clientLatitude, double clientLongitude, ArrayList<String> foodCategories, int minStars, String priceCategory, double radius) {
         this.clientLatitude = clientLatitude;
         this.clientLongitude = clientLongitude;
-        this.foodCategories = foodCategories;
+        this.foodCategories = foodCategories != null ? foodCategories : new ArrayList<>();
         this.minStars = minStars;
-        this.priceCategory = priceCategory;
-        this.radius = radius;
+        this.priceCategory = priceCategory != null ? priceCategory : "";
+        this.radius = radius > 0 ? radius : 5.0; // Default radius is 5km
     }
 
 
@@ -44,14 +51,14 @@ public class MapReduceRequest implements Serializable {
     }
 
     public void setFoodCategories(ArrayList<String> foodCategories) {
-        this.foodCategories = foodCategories;
+        this.foodCategories = foodCategories != null ? foodCategories : new ArrayList<>();
     }
 
-    public double getMinStars() {
+    public int getMinStars() {
         return minStars;
     }
 
-    public void setMinStars(double minStars) {
+    public void setMinStars(int minStars) {
         this.minStars = minStars;
     }
 
@@ -60,7 +67,7 @@ public class MapReduceRequest implements Serializable {
     }
 
     public void setPriceCategory(String priceCategory) {
-        this.priceCategory = priceCategory;
+        this.priceCategory = priceCategory != null ? priceCategory : "";
     }
 
     public double getRadius() {
@@ -68,7 +75,7 @@ public class MapReduceRequest implements Serializable {
     }
 
     public void setRadius(double radius) {
-        this.radius = radius;
+        this.radius = radius > 0 ? radius : 5.0;
     }
 
     @Override

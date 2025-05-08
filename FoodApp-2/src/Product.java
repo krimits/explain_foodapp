@@ -1,14 +1,15 @@
+// Product.java
 import java.io.Serializable;
 
 public class Product implements Serializable {
     private String name;
-    private String category;
+    private String category; // π.χ., "pizza", "burger", "drink"
     private double price;
-    private int quantity;
-    private String status; // e.g. "visible", "hidden"
+    private int quantity; // Διαθέσιμη ποσότητα
+    private String status; // e.g., "visible", "hidden"
 
 
-    public Product(String name, String category, int quantity,double price) {
+    public Product(String name, String category, int quantity, double price) {
         this.name = name;
         this.category = category;
         this.price = price;

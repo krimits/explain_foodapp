@@ -1,8 +1,7 @@
-
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-
+// Manager.java
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 
 import java.io.*;
 import java.net.*;
@@ -12,583 +11,427 @@ import java.text.ParseException;
 import java.util.*;
 
 public class Manager {
+    private static final String SERVER_IP = "127.0.0.1";
+    private static final int SERVER_PORT = 4321;
+    
     public static void main(String[] args) throws ParseException, FileNotFoundException {
         Scanner sc = new Scanner(System.in);
+        boolean running = true;
 
-        boolean flag = true;
+        while (running) {
+            printMenu();
+            String choice = sc.nextLine().trim();
 
-        while (flag) {
-            // Display menu options
-            System.out.println("1.Add store");
-            System.out.println("2.Add Product");
-            System.out.println("3.Remove Product");
-            System.out.println("4.Total sales by store type");
-            System.out.println("5.Total sales by product category");
-            System.out.println("6.Exit");
-            System.out.print("Choose an option: ");
-            String number = sc.nextLine();
+            switch (choice) {
+                case "1":
+                    addStore(sc);
+                    break;
+                case "2":
+                    addProduct(sc);
+                    break;
+                case "3":
+                    removeProduct(sc);
+                    break;
+                case "4":
+                    getSalesByStoreType(sc);
+                    break;
+                case "5":
+                    getSalesByProductCategory(sc);
+                    break;
+                case "6":
+                    System.out.println("Exiting Manager Application");
+                    running = false;
+                    break;
+                default:
+                    System.out.println("Invalid option. Please try again.");
+            }
+        }
+        
+        sc.close();
+    }
+    
+    private static void printMenu() {
+        System.out.println("\n===== STORE MANAGER =====");
+        System.out.println("1. Add store");
+        System.out.println("2. Add Product");
+        System.out.println("3. Remove Product");
+        System.out.println("4. Total sales by store type");
+        System.out.println("5. Total sales by product category");
+        System.out.println("6. Exit");
+        System.out.print("Choose option (1-6): ");
+    }
+    
+    private static void addStore(Scanner sc) {
+        ArrayList<Store> stores = new ArrayList<>();
 
-            if (number.equals("1")) {
-                ArrayList<Store> stores = new ArrayList<>();
+        System.out.println("Enter the path to the JSON file of the store:");
+        String jsonPath = sc.nextLine();
 
-                System.out.print("Give the json file of the store: ");
-                String jsonPath = sc.nextLine();
+        try (FileReader reader = new FileReader(jsonPath)) {
+            JSONParser parser = new JSONParser();
+            JSONArray jsonArray = (JSONArray) parser.parse(reader);
 
-                try (FileReader reader = new FileReader(jsonPath)) {
+            for (Object obj : jsonArray) {
+                JSONObject jsonObject = (JSONObject) obj;
 
-                    StringBuilder contentBuilder = new StringBuilder();
-                    int c;
-                    while ((c = reader.read()) != -1) {
-                        contentBuilder.append((char) c); // Read JSON file content
-                    }
-                    String jsonContent = contentBuilder.toString();
+                String name = (String) jsonObject.get("StoreName");
+                double latitude = ((Number) jsonObject.get("Latitude")).doubleValue();
+                double longitude = ((Number) jsonObject.get("Longitude")).doubleValue();
+                String category = (String) jsonObject.get("FoodCategory");
+                int stars = ((Number) jsonObject.get("Stars")).intValue();
+                int reviews = ((Number) jsonObject.get("NoOfVotes")).intValue();
+                String storeLogoPath = (String) jsonObject.get("StoreLogo");
 
-                    // Parse the JSON array
-                    JSONArray jsonArray = new JSONArray(jsonContent);
+                // Parse products
+                ArrayList<Product> products = new ArrayList<>();
+                JSONArray productsArray = (JSONArray) jsonObject.get("Products");
+                for (Object prodObj : productsArray) {
+                    JSONObject productJson = (JSONObject) prodObj;
 
-                    // Loop through JSON objects (stores)
-                    for (int i = 0; i < jsonArray.length(); i++) {
-                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                    String productName = (String) productJson.get("ProductName");
+                    String productType = (String) productJson.get("ProductType");
+                    int amount = ((Number) productJson.get("Available Amount")).intValue();
+                    double productPrice = ((Number) productJson.get("Price")).doubleValue();
 
-                        // Read store info
-                        String name = (String) jsonObject.get("StoreName");
-                        double latitude = ((Number) jsonObject.get("Latitude")).doubleValue();
-                        double longitude = ((Number) jsonObject.get("Longitude")).doubleValue();
-                        String category = (String) jsonObject.get("FoodCategory");
-                        double stars = ((Number) jsonObject.get("Stars")).doubleValue();
-                        int reviews = ((Number) jsonObject.get("NoOfVotes")).intValue();
-                        String storeLogoPath = (String) jsonObject.get("StoreLogo");
-
-                        // Read product list
-                        ArrayList<Product> products = new ArrayList<>();
-                        JSONArray productsArray = (JSONArray) jsonObject.get("Products");
-                        for (Object prodObj : productsArray) {
-                            JSONObject productJson = (JSONObject) prodObj;
-
-                            // Extract product fields
-                            String productName = (String) productJson.get("ProductName");
-                            String productType = (String) productJson.get("ProductType");
-                            int amount = ((Number) productJson.get("AvailableAmount")).intValue();
-                            double productPrice = ((Number) productJson.get("Price")).doubleValue();
-
-                            products.add(new Product(productName, productType, amount, productPrice));
-                        }
-
-                        Store s = new Store(name, latitude, longitude, category, stars, reviews, storeLogoPath, products);
-
-                        stores.add(s);
-                        System.out.println(s);
-
-                        Socket requestSocket = null;
-                        ObjectOutputStream out = null;
-                        ObjectInputStream in = null;
-                        try {
-                            // Connect to master
-                            requestSocket = new Socket("127.0.0.1", 4321);
-                            out = new ObjectOutputStream(requestSocket.getOutputStream());
-                            in = new ObjectInputStream(requestSocket.getInputStream());
-
-                            // Send to master
-                            out.writeObject("manager");
-                            out.flush();
-
-                            out.writeObject(stores);
-                            out.flush();
-
-                            // Receive from master
-                            String res = (String) in.readObject();
-                            System.out.println(res);
-                            System.out.print("\n");
-
-                        } catch (UnknownHostException unknownHost) {
-                            System.err.println("You are trying to connect to an unknown host!");
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        } catch (ClassNotFoundException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
-                        } finally {
-                            try {
-                                in.close();
-                                out.close();
-                                requestSocket.close();
-                            } catch (IOException ioException) {
-                                ioException.printStackTrace();
-                            }
-                        }
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    products.add(new Product(productName, productType, amount, productPrice));
                 }
 
-            } else if (number.equals("2")) {
-                Socket requestSocket = null;
-                ObjectOutputStream out = null;
-                ObjectInputStream in = null;
+                Store s = new Store(name, latitude, longitude, category, stars, reviews, storeLogoPath, products);
+                System.out.println(s);
+                stores.add(s);
+            }
 
-                String s = null;
-                String ex = null;
+            // Connect to the server and send the store(s)
+            Socket requestSocket = null;
+            ObjectOutputStream out = null;
+            ObjectInputStream in = null;
+            
+            try {
+                requestSocket = new Socket(SERVER_IP, SERVER_PORT);
+                out = new ObjectOutputStream(requestSocket.getOutputStream());
+                in = new ObjectInputStream(requestSocket.getInputStream());
 
-                try {
-                    // Connect to master
-                    requestSocket = new Socket("127.0.0.1", 4321);
-                    out = new ObjectOutputStream(requestSocket.getOutputStream());
-                    in = new ObjectInputStream(requestSocket.getInputStream());
+                out.writeObject("manager");
+                out.flush();
 
-                    System.out.print("Enter store name to add a product: ");
-                    String storeName = sc.nextLine();
+                out.writeObject(stores);
+                out.flush();
 
-                    // Send to master
-                    out.writeObject("findStore");
-                    out.flush();
+                String response = (String) in.readObject();
+                System.out.println("Server response: " + response);
 
-                    out.writeObject(storeName);
-                    out.flush();
+            } catch (UnknownHostException e) {
+                System.err.println("Unknown host: " + SERVER_IP);
+            } catch (IOException | ClassNotFoundException e) {
+                System.err.println("Error communicating with server: " + e.getMessage());
+            } finally {
+                closeConnections(requestSocket, out, in);
+            }
 
-                    // Receive from master
-                    s = (String) in.readObject();
+        } catch (IOException e) {
+            System.err.println("Error reading JSON file: " + e.getMessage());
+        } catch (org.json.simple.parser.ParseException e) {
+            System.err.println("Error parsing JSON: " + e.getMessage());
+        }
+    }
+    
+    private static void addProduct(Scanner sc) {
+        String jsonPath = "store.json"; // Fixed JSON file path
 
-                } catch (UnknownHostException unknownHost) {
-                    System.err.println("You are trying to connect to an unknown host!");
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    try {
-                        in.close();
-                        out.close();
-                        requestSocket.close();
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    }
-                }
+        try (FileReader reader = new FileReader(jsonPath)) {
+            JSONParser parser = new JSONParser();
+            JSONArray jsonArray = (JSONArray) parser.parse(reader);
 
-                //if the store doesn't exist the worker sends back null, otherwise sends the StoreName.
-                if (s != null){
-                    requestSocket = null;
-                    out = null;
-                    in = null;
-                    String productName = null;
+            System.out.println("Enter store name to add a product:");
+            String storeName = sc.nextLine();
+            Product product = null;
+            boolean storeFound = false;
 
-                    try {
-                        // Connect to master
-                        requestSocket = new Socket("127.0.0.1", 4321);
-                        out = new ObjectOutputStream(requestSocket.getOutputStream());
-                        in = new ObjectInputStream(requestSocket.getInputStream());
+            for (Object obj : jsonArray) {
+                JSONObject jsonObject = (JSONObject) obj;
 
-                        System.out.print("Enter Product Name: ");
-                        productName = sc.nextLine();
+                if (storeName.equalsIgnoreCase((String) jsonObject.get("StoreName"))) {
+                    storeFound = true;
+                    JSONArray productsArray = (JSONArray) jsonObject.get("Products");
 
-                        // Send to master
-                        out.writeObject("findProduct");
-                        out.flush();
+                    System.out.println("Enter Product Name:");
+                    String productName = sc.nextLine();
+                    boolean productFound = false;
 
-                        out.writeObject(s);
-                        out.flush();
+                    // Check if product already exists
+                    for (Object productObj : productsArray) {
+                        JSONObject productJson = (JSONObject) productObj;
+                        String existingProductName = (String) productJson.get("ProductName");
 
-                        out.writeObject(productName);
-                        out.flush();
+                        if (productName.equalsIgnoreCase(existingProductName)) {
+                            productFound = true;
 
-                        // Receive from master
-                        ex = (String) in.readObject();
-
-                    } catch (UnknownHostException unknownHost) {
-                        System.err.println("You are trying to connect to an unknown host!");
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    } catch (ClassNotFoundException e) {
-                        throw new RuntimeException(e);
-                    } finally {
-                        try {
-                            in.close();
-                            out.close();
-                            requestSocket.close();
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        }
-                    }
-
-                    requestSocket = null;
-                    out = null;
-                    in = null;
-
-                    //if the product doesn't exist the worker sends back "doesnt exist", otherwise sends "exists"
-                    if (ex.equalsIgnoreCase("exists")) {
-                        try {
-                            // Connect to master
-                            requestSocket = new Socket("127.0.0.1", 4321);
-                            out = new ObjectOutputStream(requestSocket.getOutputStream());
-                            in = new ObjectInputStream(requestSocket.getInputStream());
-
-                            System.out.print("Product already exists. How much would you like to add to the quantity? ");
+                            System.out.println("Product already exists. How much would you like to add to the quantity?");
                             int additionalAmount = Integer.parseInt(sc.nextLine());
-
-                            // Send to master
-                            out.writeObject("AmountInc");
-                            out.flush();
-
-                            out.writeObject(s);
-                            out.flush();
-
-                            out.writeObject(productName);
-                            out.flush();
-
-                            out.writeInt(additionalAmount);
-                            out.flush();
-
-                            // Receive from master
-                            String res = (String) in.readObject();
-                            System.out.println(res);
-                            System.out.print("\n");
-
-                        } catch (UnknownHostException unknownHost) {
-                            System.err.println("You are trying to connect to an unknown host!");
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        } catch (ClassNotFoundException e) {
-                            throw new RuntimeException(e);
-                        } finally {
-                            try {
-                                in.close();
-                                out.close();
-                                requestSocket.close();
-                            } catch (IOException ioException) {
-                                ioException.printStackTrace();
-                            }
-                        }
-                    } else {
-
-                        Product pro = null;
-                        try {
-                            // Connect to master
-                            requestSocket = new Socket("127.0.0.1", 4321);
-                            out = new ObjectOutputStream(requestSocket.getOutputStream());
-                            in = new ObjectInputStream(requestSocket.getInputStream());
-
-                            System.out.print("Enter Product Type: ");
-                            String productType = sc.nextLine();
-
-                            System.out.print("Enter Available Amount: ");
-                            int amount = Integer.parseInt(sc.nextLine());
-
-                            System.out.print("Enter Product Price: ");
-                            double productPrice = Double.parseDouble(sc.nextLine());
-
-                            pro = new Product(productName, productType, amount, productPrice);
-
-                            // Send to master
-                            out.writeObject("NewProduct");
-                            out.flush();
-
-                            out.writeObject(s);
-                            out.flush();
-
-                            out.writeObject(pro);
-                            out.flush();
-
-                            // Receive from master
-                            String res = (String) in.readObject();
-                            System.out.println(res);
-                            System.out.print("\n");
-
-                        } catch (UnknownHostException unknownHost) {
-                            System.err.println("You are trying to connect to an unknown host!");
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        } catch (ClassNotFoundException e) {
-                            throw new RuntimeException(e);
-                        } finally {
-                            try {
-                                in.close();
-                                out.close();
-                                requestSocket.close();
-                            } catch (IOException ioException) {
-                                ioException.printStackTrace();
-                            }
+                            
+                            int currentAmount = ((Number) productJson.get("Available Amount")).intValue();
+                            double price = ((Number) productJson.get("Price")).doubleValue();
+                            String productType = (String) productJson.get("ProductType");
+                            
+                            product = new Product(productName, productType, additionalAmount, price);
+                            break;
                         }
                     }
 
-                }else System.out.println("Store not found.");
+                    if (!productFound) {
+                        System.out.println("Enter Product Type:");
+                        String productType = sc.nextLine();
 
+                        System.out.println("Enter Available Amount:");
+                        int amount = Integer.parseInt(sc.nextLine());
 
-            } else if (number.equals("3")) {
-                Socket requestSocket = null;
-                ObjectOutputStream out = null;
-                ObjectInputStream in = null;
+                        System.out.println("Enter Product Price:");
+                        double productPrice = Double.parseDouble(sc.nextLine());
 
-                String storeName = null;
-
-                try {
-                    // Connect to master
-                    requestSocket = new Socket("127.0.0.1", 4321);
-                    out = new ObjectOutputStream(requestSocket.getOutputStream());
-                    in = new ObjectInputStream(requestSocket.getInputStream());
-
-                    System.out.print("Enter store name to remove a product: ");
-                    String s = sc.nextLine();
-
-                    // Send to master
-                    out.writeObject("findStore");
-                    out.flush();
-
-                    out.writeObject(s);
-                    out.flush();
-
-                    // Receive from master
-                    storeName = (String) in.readObject();
-
-                } catch (UnknownHostException unknownHost) {
-                    System.err.println("You are trying to connect to an unknown host!");
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    try {
-                        in.close();
-                        out.close();
-                        requestSocket.close();
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
+                        product = new Product(productName, productType, amount, productPrice);
                     }
-                }
 
-                //if the store doesn't exist the worker sends back null, otherwise sends the StoreName.
-                if (storeName != null) {
-                    requestSocket = null;
-                    out = null;
-                    in = null;
-
-                    String productName = null;
-
+                    // Send product to server
+                    Socket requestSocket = null;
+                    ObjectOutputStream out = null;
+                    ObjectInputStream in = null;
+                    
                     try {
-                        // Connect to master
-                        requestSocket = new Socket("127.0.0.1", 4321);
+                        requestSocket = new Socket(SERVER_IP, SERVER_PORT);
                         out = new ObjectOutputStream(requestSocket.getOutputStream());
                         in = new ObjectInputStream(requestSocket.getInputStream());
 
-                        System.out.print("Enter Product Name:");
-                        String p = sc.nextLine();
-
-                        // Send to master
-                        out.writeObject("findProduct2");
+                        out.writeObject("product");
                         out.flush();
 
                         out.writeObject(storeName);
                         out.flush();
 
-                        out.writeObject(p);
+                        out.writeObject(product);
                         out.flush();
 
-                        // Receive from master
-                        productName = (String) in.readObject();
+                        String response = (String) in.readObject();
+                        System.out.println("Server response: " + response);
 
-                    } catch (UnknownHostException unknownHost) {
-                        System.err.println("You are trying to connect to an unknown host!");
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    } catch (ClassNotFoundException e) {
-                        throw new RuntimeException(e);
+                    } catch (Exception e) {
+                        System.err.println("Error communicating with server: " + e.getMessage());
                     } finally {
-                        try {
-                            in.close();
-                            out.close();
-                            requestSocket.close();
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        }
+                        closeConnections(requestSocket, out, in);
                     }
-
-                    //if the product doesn't exist the worker sends back null, otherwise sends the ProductName.
-                    if (productName != null && productName!= "hidden") {
-
-                        requestSocket = null;
-                        out = null;
-                        in = null;
-
-                        try {
-                            // Connect to master
-                            requestSocket = new Socket("127.0.0.1", 4321);
-                            out = new ObjectOutputStream(requestSocket.getOutputStream());
-                            in = new ObjectInputStream(requestSocket.getInputStream());
-
-                            System.out.println("1. Remove the product");
-                            System.out.println("2. Decrease the quantity of the product");
-                            System.out.print("Choose an option: ");
-                            String num = sc.nextLine();
-
-                            if(num.equals("1")){
-                                // Send to master
-                                out.writeObject("remove");
-                                out.flush();
-
-                                out.writeObject(storeName);
-                                out.flush();
-
-                                out.writeObject(productName);
-                                out.flush();
-
-                                // Receive from master
-                                String res = (String) in.readObject();
-                                System.out.println(res);
-                                System.out.print("\n");
-
-                            } else if (num.equals("2")) {
-
-                                System.out.print("How much would you like to decrease the quantity?");
-                                int amount = Integer.parseInt(sc.nextLine());
-
-                                // Send to master
-                                out.writeObject("AmountDec");
-                                out.flush();
-
-                                out.writeObject(storeName);
-                                out.flush();
-
-                                out.writeObject(productName);
-                                out.flush();
-
-                                out.writeInt(amount);
-                                out.flush();
-
-                                // Receive from master
-                                String res = (String) in.readObject();
-                                System.out.println(res);
-                                System.out.print("\n");
-
-                            }
-
-                        } catch (UnknownHostException unknownHost) {
-                            System.err.println("You are trying to connect to an unknown host!");
-                        } catch (IOException ioException) {
-                            ioException.printStackTrace();
-                        } catch (ClassNotFoundException e) {
-                            throw new RuntimeException(e);
-                        } finally {
-                            try {
-                                in.close();
-                                out.close();
-                                requestSocket.close();
-                            } catch (IOException ioException) {
-                                ioException.printStackTrace();
-                            }
-                        }
-
-                    } else if (productName == null){
-                        System.out.println("The product doesn't exist");
-                    } else if (productName == "hidden") {
-                        System.out.println("The product is already removed");
-                    }
-
-                }else System.out.println("Store not found.");
-
-
-            } else if (number.equals("4")) {
-                System.out.print("Enter the store type (e.g., pizzeria, burger):");
-                String storeType = sc.nextLine();
-
-                Socket requestSocket = null;
-                ObjectOutputStream out = null;
-                ObjectInputStream in = null;
-                try{
-                    // Connect to master
-                    requestSocket = new Socket("127.0.0.1", 4321);
-                    out = new ObjectOutputStream(requestSocket.getOutputStream());
-                    in = new ObjectInputStream(requestSocket.getInputStream());
-
-                    // Send to master
-                    out.writeObject("storeType");
-                    out.flush();
-
-                    out.writeObject(storeType);
-                    out.flush();
-
-                    // Receive from master
-                    Map<String, Integer> result = (Map<String, Integer>) in.readObject();
-
-                    int total = 0;
-                    System.out.println("Sales by Store for type: " + storeType);
-                    for (Map.Entry<String, Integer> entry : result.entrySet()) { // Print for every store
-                        System.out.println("• " + entry.getKey() + ": " + entry.getValue());
-                        total += entry.getValue();
-                    }
-                    System.out.println("Total Sales: " + total + "\n");
-
-                } catch (UnknownHostException unknownHost) {
-                    System.err.println("You are trying to connect to an unknown host!");
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    try {
-                        in.close();
-                        out.close();
-                        requestSocket.close();
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    }
+                    
+                    break;
                 }
-
-
-            } else if (number.equals("5")) {
-                System.out.print("Enter the product category (e.g., pizza, salad, burger): ");
-                String productCategory = sc.nextLine();
-
-                Socket requestSocket = null;
-                ObjectOutputStream out = null;
-                ObjectInputStream in = null;
-                try {
-                    // Connect to master
-                    requestSocket = new Socket("127.0.0.1", 4321);
-                    out = new ObjectOutputStream(requestSocket.getOutputStream());
-                    in = new ObjectInputStream(requestSocket.getInputStream());
-
-                    // Send to master
-                    out.writeObject("productCategory");
-                    out.flush();
-
-                    out.writeObject(productCategory);
-                    out.flush();
-
-                    // Receive from master
-                    Map<String, Integer> result = (Map<String, Integer>) in.readObject();
-
-                    int total = 0;
-                    System.out.println("Sales by Store for product category: " + productCategory);
-                    for (Map.Entry<String, Integer> entry : result.entrySet()) { // Print for every store
-                        System.out.println("• " + entry.getKey() + ": " + entry.getValue());
-                        total += entry.getValue();
-                    }
-                    System.out.println("Total Sales: " + total + "\n");
-
-
-
-                } catch (UnknownHostException unknownHost) {
-                    System.err.println("You are trying to connect to an unknown host!");
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    try {
-                        in.close();
-                        out.close();
-                        requestSocket.close();
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    }
-                }
-
-
-            } else if (number.equals("6")) {
-                System.out.println("Exit");
-                flag = false;
-            } else {
-                System.out.println("Wrong number. Try again");
             }
-        }
 
+            if (!storeFound) {
+                System.out.println("Store not found.");
+            }
+
+        } catch (IOException e) {
+            System.err.println("Error reading store.json: " + e.getMessage());
+        } catch (org.json.simple.parser.ParseException e) {
+            System.err.println("Error parsing JSON: " + e.getMessage());
+        }
+    }
+    
+    private static void removeProduct(Scanner sc) {
+        String jsonPath = "store.json";
+        Map<String, Integer> productQuantityMap = new HashMap<>();
+
+        try (FileReader reader = new FileReader(jsonPath)) {
+            JSONParser parser = new JSONParser();
+            JSONArray jsonArray = (JSONArray) parser.parse(reader);
+
+            System.out.println("Enter store name to remove a product:");
+            String storeName = sc.nextLine();
+
+            boolean storeFound = false;
+            boolean productFound = false;
+
+            for (Object obj : jsonArray) {
+                JSONObject jsonObject = (JSONObject) obj;
+
+                if (storeName.equalsIgnoreCase((String) jsonObject.get("StoreName"))) {
+                    storeFound = true;
+                    JSONArray productsArray = (JSONArray) jsonObject.get("Products");
+
+                    System.out.println("Enter Product Name to remove:");
+                    String productName = sc.nextLine();
+
+                    System.out.println("1. Remove the product");
+                    System.out.println("2. Decrease the quantity of the product");
+                    System.out.print("Choose (1-2): ");
+                    String option = sc.nextLine();
+
+                    if (option.equals("1")) {
+                        for (Object prodObj : productsArray) {
+                            JSONObject productJson = (JSONObject) prodObj;
+
+                            if (productName.equalsIgnoreCase((String) productJson.get("ProductName"))) {
+                                productJson.put("Hidden", true);
+                                productQuantityMap.put(productName, -1); // -1 code to hide
+                                productFound = true;
+                                break;
+                            }
+                        }
+                    } else if (option.equals("2")) {
+                        for (Object prodObj : productsArray) {
+                            JSONObject productJson = (JSONObject) prodObj;
+
+                            if (productName.equalsIgnoreCase((String) productJson.get("ProductName"))) {
+                                productFound = true;
+                                int currentQuantity = ((Number) productJson.get("Available Amount")).intValue();
+
+                                System.out.println("Enter quantity to subtract:");
+                                int subtractAmount = Integer.parseInt(sc.nextLine());
+
+                                if (subtractAmount > currentQuantity) {
+                                    System.out.println("Error: Not enough stock!");
+                                    System.out.println("The available stock is: " + currentQuantity);
+                                } else {
+                                    int newQuantity = currentQuantity - subtractAmount;
+                                    productJson.put("Available Amount", newQuantity);
+                                    productQuantityMap.put(productName, newQuantity);
+                                    System.out.println("Updated Quantity: " + newQuantity);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    break;
+                }
+            }
+
+            if (!storeFound) {
+                System.out.println("Store not found.");
+            } else if (!productFound) {
+                System.out.println("Product not found.");
+            } else {
+                // Update JSON file
+                try (FileWriter writer = new FileWriter(jsonPath)) {
+                    writer.write(jsonArray.toJSONString());
+                    writer.flush();
+                    System.out.println("Changes saved to store.json.");
+                }
+
+                // Send update to server
+                Socket requestSocket = null;
+                ObjectOutputStream out = null;
+                ObjectInputStream in = null;
+                
+                try {
+                    requestSocket = new Socket(SERVER_IP, SERVER_PORT);
+                    out = new ObjectOutputStream(requestSocket.getOutputStream());
+                    in = new ObjectInputStream(requestSocket.getInputStream());
+
+                    out.writeObject("remove");
+                    out.flush();
+
+                    out.writeObject(storeName);
+                    out.flush();
+
+                    out.writeObject(productQuantityMap);
+                    out.flush();
+
+                    String response = (String) in.readObject();
+                    System.out.println("Server response: " + response);
+
+                } catch (Exception e) {
+                    System.err.println("Error communicating with server: " + e.getMessage());
+                } finally {
+                    closeConnections(requestSocket, out, in);
+                }
+            }
+
+        } catch (IOException | org.json.simple.parser.ParseException e) {
+            System.err.println("Error with JSON file: " + e.getMessage());
+        }
+    }
+    
+    private static void getSalesByStoreType(Scanner sc) {
+        System.out.println("Enter the store type (e.g., pizzeria, burger):");
+        String storeType = sc.nextLine();
+
+        Socket requestSocket = null;
+        ObjectOutputStream out = null;
+        ObjectInputStream in = null;
+        
+        try {
+            requestSocket = new Socket(SERVER_IP, SERVER_PORT);
+            out = new ObjectOutputStream(requestSocket.getOutputStream());
+            in = new ObjectInputStream(requestSocket.getInputStream());
+
+            out.writeObject("storeType");
+            out.flush();
+
+            out.writeObject(storeType);
+            out.flush();
+
+            Map<String, Integer> result = (Map<String, Integer>) in.readObject();
+
+            int total = 0;
+            System.out.println("\nSales by Store for type: " + storeType);
+            for (Map.Entry<String, Integer> entry : result.entrySet()) {
+                if (!"total".equals(entry.getKey())) {  // Skip the "total" entry for our own calculation
+                    System.out.println("• " + entry.getKey() + ": " + entry.getValue());
+                    total += entry.getValue();
+                }
+            }
+            System.out.println("Total Sales: " + total + "\n");
+
+        } catch (Exception e) {
+            System.err.println("Error communicating with server: " + e.getMessage());
+        } finally {
+            closeConnections(requestSocket, out, in);
+        }
+    }
+    
+    private static void getSalesByProductCategory(Scanner sc) {
+        System.out.println("Enter the product category (e.g., pizza, salad, burger):");
+        String productCategory = sc.nextLine();
+
+        Socket requestSocket = null;
+        ObjectOutputStream out = null;
+        ObjectInputStream in = null;
+        
+        try {
+            requestSocket = new Socket(SERVER_IP, SERVER_PORT);
+            out = new ObjectOutputStream(requestSocket.getOutputStream());
+            in = new ObjectInputStream(requestSocket.getInputStream());
+
+            out.writeObject("productCategory");
+            out.flush();
+
+            out.writeObject(productCategory);
+            out.flush();
+
+            Map<String, Integer> result = (Map<String, Integer>) in.readObject();
+
+            int total = 0;
+            System.out.println("\nSales by Store for product category: " + productCategory);
+            for (Map.Entry<String, Integer> entry : result.entrySet()) {
+                if (!"total".equals(entry.getKey())) {  // Skip the "total" entry for our own calculation
+                    System.out.println("• " + entry.getKey() + ": " + entry.getValue());
+                    total += entry.getValue();
+                }
+            }
+            System.out.println("Total Sales: " + total + "\n");
+
+        } catch (Exception e) {
+            System.err.println("Error communicating with server: " + e.getMessage());
+        } finally {
+            closeConnections(requestSocket, out, in);
+        }
+    }
+    
+    private static void closeConnections(Socket socket, ObjectOutputStream out, ObjectInputStream in) {
+        try {
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (socket != null) socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -1,4 +1,4 @@
-import java.awt.print.Book;
+// WorkerActions.java
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -27,444 +27,158 @@ public class WorkerActions extends Thread {
             String role = (String) in.readObject();
 
             if (role.equals("manager")) {
-                // Receive from master
-                Store s = (Store) in.readObject();
+                // Λειτουργία προσθήκης καταστήματος (δεν αλλάζει)
+                Store incomingStore = (Store) in.readObject();
+                boolean storeExists = false;
 
-                stores.add(s);
+                synchronized (lock) {
+                    for (Store store : stores) {
+                        if (store.getStoreName().equalsIgnoreCase(incomingStore.getStoreName())) {
+                            storeExists = true;
+                            break;
+                        }
+                    }
 
-                // Send to master
-                out.writeObject("Store added successfully");
-                out.flush();
-
-            }else if (role.equals("findStore")) {
-                // Receive from master
+                    if (!storeExists) {
+                        stores.add(incomingStore);
+                        out.writeObject("Store(s) added successfully");
+                    } else {
+                        out.writeObject("Store already exists.");
+                    }
+                    out.flush();
+                }
+            } else if (role.equals("product")) {
+                // Λειτουργία προσθήκης προϊόντος (δεν αλλάζει)
                 String storeName = (String) in.readObject();
+                Product newProduct = (Product) in.readObject();
 
                 boolean storeFound = false;
+                boolean productUpdated = false;
 
                 synchronized (lock) {
                     for (Store store : stores) {
                         if (store.getStoreName().equalsIgnoreCase(storeName)) {
                             storeFound = true;
-                            break; // exit after store is found
+
+                            for (Product product : store.getProducts()) {
+                                if (product.getName().equalsIgnoreCase(newProduct.getName())) {
+                                    // Product exists: update quantity
+                                    product.setQuantity(product.getQuantity() + newProduct.getQuantity());
+                                    productUpdated = true;
+                                    break;
+                                }
+                            }
+
+                            if (!productUpdated) {
+                                // Product does not exist: add new
+                                store.getProducts().add(newProduct);
+                            }
+
+                            break; // exit after store is found and processed
                         }
                     }
                 }
 
                 if (!storeFound) {
-                    storeName = null;
-                }
-
-                // Send to master
-                out.writeObject(storeName);
-                out.flush();
-
-            }else if (role.equals("findProduct")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                String ProductName = (String) in.readObject();
-
-                boolean productFound = false;
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            for (Product pro : store.getProducts()) {
-                                if (pro.getName().equalsIgnoreCase(ProductName)) {
-                                    productFound = true;
-                                    break; // exit after product is found
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Send to master
-                if (productFound) {
-                    out.writeObject("exists");
-                }else{
-                    out.writeObject("doesnt exist");
-                }
-                out.flush();
-
-
-            }else if (role.equals("findProduct2")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                String ProductName = (String) in.readObject();
-
-                boolean productFound = false;
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            for (Product pro : store.getProducts()) {
-                                if (pro.getName().equalsIgnoreCase(ProductName)) {
-                                    productFound = true;
-                                    // Send to master
-                                    if (pro.getQuantity() == -1){
-                                        out.writeObject("hidden");
-                                        out.flush();
-                                    }else {
-                                        out.writeObject(ProductName);
-                                        out.flush();
-                                    }
-                                    break; // exit after product is found
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!productFound) {
-                    ProductName = null;
-                    out.writeObject(ProductName);
-                    out.flush();
-                }
-
-            }else if (role.equals("AmountInc")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                String ProductName = (String) in.readObject();
-                int amount = (int) in.readInt();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            for (Product pro : store.getProducts()) {
-                                if (pro.getName().equalsIgnoreCase(ProductName)) {
-                                    pro.setQuantity(amount + pro.getQuantity());
-                                    break; // exit after quantity is changed
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject("Amount changed successfully");
-                out.flush();
-
-            }else if (role.equals("NewProduct")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                Product pro = (Product) in.readObject();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            store.getProducts().add(pro);
-                            System.out.println(store.getProducts());
-                            break; // exit after product is added
-
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject("Product added successfully");
-                out.flush();
-
-            }else if (role.equals("remove")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                String pro = (String) in.readObject();
-
-                boolean prodFound = false;
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            prodFound = true;
-                            for (Product prod : store.getProducts()) {
-                                if (prod.getName().equalsIgnoreCase(pro)) {
-                                    prod.setQuantity(-1);
-                                    prod.setStatus("hidden");
-                                    break; // exit after quantity is changed
-                                }
-                            }
-
-                        }
-                    }
-                }
-
-                // Send to master
-                if (prodFound) {
-                    out.writeObject("Product removed or updated successfully.");
+                    out.writeObject("Store not found.");
+                } else if (productUpdated) {
+                    out.writeObject("Product quantity updated successfully.");
                 } else {
-                    out.writeObject("Product not found.");
+                    out.writeObject("New product added successfully.");
                 }
                 out.flush();
-
-            }else if (role.equals("AmountDec")) {
-                // Receive from master
+            } else if (role.equals("remove")) {
+                // Λειτουργία αφαίρεσης προϊόντος (δεν αλλάζει)
                 String storeName = (String) in.readObject();
-                String ProductName = (String) in.readObject();
-                int amount = (int) in.readInt();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            for (Product pro : store.getProducts()) {
-                                if (pro.getName().equalsIgnoreCase(ProductName)) {
-                                    if ((pro.getQuantity() - amount)>=0) {
-                                        pro.setQuantity(pro.getQuantity() - amount);
-                                        out.writeObject("Amount changed successfully");
-                                        out.flush();
-                                    }else {
-                                        out.writeObject("Amount is greater than the quantity");
-                                        out.flush();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-            }else if (role.equals("storeType")) {
-                // Receive from master
-                String requestedType = (String) in.readObject(); // e.g., "pizzeria"
-
-                Map<String, Integer> result = new HashMap<>();
-
-                synchronized (lock) {
-                    int totalSold = 0;
-                    for (Store store : stores) {
-                        if (store.getCategory().equalsIgnoreCase(requestedType)) {
-                            for (Purchase purchase : store.getPurchases()) {
-                                for (Product p : purchase.getPurchasedProducts()) {
-                                    totalSold += p.getQuantity();  // Sum all quantities
-                                }
-                            }
-                            result.put(store.getStoreName(), totalSold);
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(result);
-                out.flush();
-
-
-            }else if (role.equals("productCategory")) {
-                // Receive from master
-                String requestedCategory = (String) in.readObject(); // e.g., "pizza"
-
-                Map<String, Integer> result = new HashMap<>();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        int totalCategorySales = 0;
-                        for (Purchase purchase : store.getPurchases()) {
-                            for (Product product : purchase.getPurchasedProducts()) {
-                                if (product.getCategory().equalsIgnoreCase(requestedCategory)) {
-                                    totalCategorySales += product.getQuantity();
-                                }
-                            }
-                        }
-
-                        if (totalCategorySales > 0) {
-                            result.put(store.getStoreName(), totalCategorySales);
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(result);
-                out.flush();
-
-            }else if (role.equals("client")) {
-                // Receive from master
-                MapReduceRequest request = (MapReduceRequest) in.readObject();
-
-                double userLat = request.getClientLatitude();
-                double userLon = request.getClientLongitude();
-                double maxDistance = request.getRadius();
-
-                ArrayList<Store> result = new ArrayList<>();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        double storeLat = store.getLatitude();
-                        double storeLon = store.getLongitude();
-
-                        double distance = Math.sqrt(Math.pow(userLat - storeLat, 2) + Math.pow(userLon - storeLon, 2));
-                        if (distance <= maxDistance) {
-                            result.add(store);
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(result);
-                out.flush();
-
-            }else if (role.equals("filter")) {
-                // Receive from master
-                MapReduceRequest request = (MapReduceRequest) in.readObject();
-
-                double userLat = request.getClientLatitude();
-                double userLon = request.getClientLongitude();
-                double radius = request.getRadius();
-
-                ArrayList<String> categories = (ArrayList<String>) request.getFoodCategories();
-                double minStars = request.getMinStars();
-                String price = request.getPriceCategory();
-
-                ArrayList<Store> result = new ArrayList<>();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        double distance = Math.sqrt(Math.pow(userLat - store.getLatitude(), 2) + Math.pow(userLon - store.getLongitude(), 2));
-                        boolean matchesDistance = distance <= radius;
-                        boolean matchesCategory = categories.isEmpty() || categories.contains(store.getCategory());
-                        boolean matchesStars = minStars == 0 || store.getStars() >= minStars;
-                        boolean matchesPrice = price.isEmpty() || store.calculatePriceCategory().equalsIgnoreCase(price);
-
-                        if (matchesDistance && matchesCategory && matchesStars && matchesPrice) {
-                            result.add(store);
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(result);
-                out.flush();
-
-
-            }else if (role.equals("fetchProducts")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-
-                ArrayList<Product> available = new ArrayList<>();
-
-                synchronized (lock) {
-                    for (Store store : stores) {
-                        if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            for (Product product : store.getProducts()) {
-                                if (product.getStatus().equalsIgnoreCase("visible")) {
-                                    available.add(product);
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(available);
-                out.flush();
-
-            }else if (role.equals("purchase")) {
-                // Receive from master
-                Purchase purchase = (Purchase) in.readObject();
-                String storeName = (String) in.readObject();
-
-                ArrayList<Product> requestedProducts = purchase.getPurchasedProducts();
-
-                String message = "";
-
-                synchronized (lock) {
-                    Store targetStore = null;
-                    for (Store s : stores) { // find the object store
-                        if (s.getStoreName().equalsIgnoreCase(storeName)) {
-                            targetStore = s;
-                            break;
-                        }
-                    }
-
-                    if (targetStore != null) { // if the store is found we store the products
-                        Map<String, Product> storeProductMap = new HashMap<>();
-                        for (Product p : targetStore.getProducts()) {
-                            storeProductMap.put(p.getName().toLowerCase(), p);
-                        }
-
-                        boolean allValid = true;
-
-                        for (Product req : requestedProducts) {
-                            Product available = storeProductMap.get(req.getName().toLowerCase());
-
-                            if (available == null) {
-                                message = "Product not found: " + req.getName();
-                                allValid = false;
-                                break;
-                            }
-
-                            if (!available.getStatus().equalsIgnoreCase("visible")) {
-                                message = "Product not available: " + req.getName();
-                                allValid = false;
-                                break;
-                            }
-
-                            if (available.getQuantity() < req.getQuantity()) {
-                                message = "Not enough quantity for: " + req.getName();
-                                allValid = false;
-                                break;
-                            }
-                        }
-
-                        if (allValid) {
-                            for (Product req : requestedProducts) {
-                                Product prod = storeProductMap.get(req.getName().toLowerCase());
-
-                                prod.setQuantity(prod.getQuantity() - req.getQuantity());
-
-                                // Fill up the empty fields
-                                req.setCategory(prod.getCategory());
-                                req.setPrice(prod.getPrice());
-                            }
-
-                            targetStore.getPurchases().add(purchase);
-                            message = "Purchase successful at " + targetStore.getStoreName();
-                            if (requestedProducts.isEmpty()) {
-                                message = "The purchase requested is empty";
-                            }
-
-                        }
-                    }
-                }
-
-                // Send to master
-                out.writeObject(message);
-                out.flush();
-
-
-            }else if (role.equals("rate")) {
-                // Receive from master
-                String storeName = (String) in.readObject();
-                int rating = (int) in.readObject();
-
+                Map<String, Integer> productQuantityMap = (Map<String, Integer>) in.readObject();
                 boolean storeFound = false;
 
                 synchronized (lock) {
                     for (Store store : stores) {
                         if (store.getStoreName().equalsIgnoreCase(storeName)) {
-                            double oldStars = store.getStars();          // current average rating
-                            int oldReviews = store.getNoOfReviews();  // total reviews so far
-
-                            int newReviews = oldReviews + 1;
-                            double newAvg = (oldStars * oldReviews + rating) / newReviews;
-
-                            // Update store fields
-                            store.setStars(newAvg);
-                            store.setNoOfReviews(newReviews);
-
                             storeFound = true;
+
+                            for (Product product : store.getProducts()) {
+                                String productName = product.getName();
+
+                                if (productQuantityMap.containsKey(productName)) {
+                                    int newQty = productQuantityMap.get(productName);
+
+                                    if (newQty == -1) {
+                                        product.setStatus("hidden");
+                                    } else {
+                                        product.setQuantity(newQty);
+                                        product.setStatus("visible");
+                                    }
+                                }
+                            }
                             break;
                         }
                     }
                 }
 
-                // Send to master
                 if (storeFound) {
-                    out.writeObject("Rating submitted successfully.");
+                    out.writeObject("Product(s) removed or updated successfully.");
                 } else {
                     out.writeObject("Store not found.");
                 }
                 out.flush();
+            } else if (role.equals("storeType")) {
+                // Υλοποίηση MapReduce για συνολικές πωλήσεις ανά τύπο καταστήματος
+                String requestedType = (String) in.readObject();
+                
+                // Εκτέλεση της Map φάσης (αντιστοίχιση καταστημάτων με τον τύπο με τις πωλήσεις τους)
+                Map<String, Integer> mappedResults = mapStoreType(requestedType);
+                
+                // Αποστολή των αποτελεσμάτων της Map φάσης στο Master
+                out.writeObject(mappedResults);
+                out.flush();
+            } else if (role.equals("productCategory")) {
+                // Υλοποίηση MapReduce για συνολικές πωλήσεις ανά κατηγορία προϊόντος
+                String requestedCategory = (String) in.readObject();
+                
+                // Εκτέλεση της Map φάσης (αντιστοίχιση καταστημάτων με πωλήσεις ανά κατηγορία προϊόντος)
+                Map<String, Integer> mappedResults = mapProductCategory(requestedCategory);
+                
+                // Αποστολή των αποτελεσμάτων της Map φάσης στο Master
+                out.writeObject(mappedResults);
+                out.flush();
+            } else if (role.equals("client") || role.equals("filter")) {
+                // Υλοποίηση MapReduce για αναζήτηση καταστημάτων
+                MapReduceRequest request = (MapReduceRequest) in.readObject();
+                
+                // Εκτέλεση της Map φάσης (φιλτράρισμα καταστημάτων βάσει κριτηρίων)
+                List<Store> mappedResults = mapStores(request);
+                
+                // Αποστολή των αποτελεσμάτων της Map φάσης στο Master
+                out.writeObject(new ArrayList<>(mappedResults));
+                out.flush();
+                
+                // Προαιρετική επιβεβαίωση από τον client
+                try {
+                    String confirm = (String) in.readObject();
+                    if (!"Done".equalsIgnoreCase(confirm)) {
+                        System.out.println("Client did not confirm receipt of results.");
+                    }
+                } catch (IOException | ClassNotFoundException e) {
+                    // Διαχείριση εξαίρεσης - ο client μπορεί να μην στείλει επιβεβαίωση
+                }
+            } else if (role.equals("fetchProducts")) {
+                // Ανάκτηση προϊόντων για συγκεκριμένο κατάστημα
+                String storeName = (String) in.readObject();
+                ArrayList<Product> available = fetchAvailableProducts(storeName);
+                out.writeObject(available);
+                out.flush();
+            } else if (role.equals("purchase")) {
+                // Λειτουργία αγοράς
+                Purchase purchase = (Purchase) in.readObject();
+                processPurchase(purchase);
+            } else if (role.equals("rate")) {
+                // Λειτουργία αξιολόγησης
+                String storeName = (String) in.readObject();
+                int rating = (int) in.readObject();
+                processRating(storeName, rating);
             }
-
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         } finally {
@@ -476,5 +190,219 @@ public class WorkerActions extends Thread {
                 e.printStackTrace();
             }
         }
+    }
+
+    /**
+     * Map λειτουργία: Αντιστοίχιση καταστημάτων του συγκεκριμένου τύπου με τις πωλήσεις τους
+     * 
+     * @param storeType Ο τύπος καταστήματος (π.χ. "pizzeria")
+     * @return Ένα Map που αντιστοιχίζει ονόματα καταστημάτων με το πλήθος πωλήσεων
+     */
+    private Map<String, Integer> mapStoreType(String storeType) {
+        Map<String, Integer> result = new HashMap<>();
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                if (store.getCategory().equalsIgnoreCase(storeType)) {
+                    // Για κάθε κατάστημα του ζητούμενου τύπου, υπολογίζουμε τις συνολικές πωλήσεις
+                    int totalSold = 0;
+                    
+                    for (Purchase purchase : store.getPurchases()) {
+                        for (Product p : purchase.getPurchasedProducts()) {
+                            totalSold += p.getQuantity();  // Άθροισμα ποσοτήτων
+                        }
+                    }
+                    
+                    // Αντιστοίχιση ονόματος καταστήματος (κλειδί) με πωλήσεις (τιμή)
+                    result.put(store.getStoreName(), totalSold);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Map λειτουργία: Αντιστοίχιση καταστημάτων με πωλήσεις για συγκεκριμένη κατηγορία προϊόντος
+     * 
+     * @param productCategory Η κατηγορία προϊόντος (π.χ. "pizza")
+     * @return Ένα Map που αντιστοιχίζει ονόματα καταστημάτων με το πλήθος πωλήσεων
+     */
+    private Map<String, Integer> mapProductCategory(String productCategory) {
+        Map<String, Integer> result = new HashMap<>();
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                int totalCategorySales = 0;
+                
+                for (Purchase purchase : store.getPurchases()) {
+                    for (Product product : purchase.getPurchasedProducts()) {
+                        if (product.getCategory().equalsIgnoreCase(productCategory)) {
+                            totalCategorySales += product.getQuantity();
+                        }
+                    }
+                }
+                
+                if (totalCategorySales > 0) {
+                    // Αντιστοίχιση ονόματος καταστήματος (κλειδί) με πωλήσεις συγκεκριμένης κατηγορίας (τιμή)
+                    result.put(store.getStoreName(), totalCategorySales);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Map λειτουργία: Φιλτράρισμα καταστημάτων βάσει κριτηρίων αναζήτησης
+     * 
+     * @param request Το αίτημα που περιέχει τα κριτήρια αναζήτησης
+     * @return Λίστα καταστημάτων που ικανοποιούν τα κριτήρια
+     */
+    private List<Store> mapStores(MapReduceRequest request) {
+        List<Store> result = new ArrayList<>();
+        
+        double userLat = request.getClientLatitude();
+        double userLon = request.getClientLongitude();
+        double radius = request.getRadius();
+        
+        ArrayList<String> categories = (ArrayList<String>) request.getFoodCategories();  
+        int minStars = request.getMinStars();                  
+        String price = request.getPriceCategory();             
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                // Υπολογισμός απόστασης με τον τύπο της Ευκλείδειας απόστασης
+                double distance = Math.sqrt(Math.pow(userLat - store.getLatitude(), 2) + 
+                                           Math.pow(userLon - store.getLongitude(), 2));
+                
+                // Έλεγχος αν το κατάστημα ικανοποιεί όλα τα κριτήρια
+                boolean matchesDistance = distance <= radius;
+                boolean matchesCategory = categories.isEmpty() || categories.contains(store.getCategory());
+                boolean matchesStars = minStars == 0 || store.getStars() >= minStars;
+                boolean matchesPrice = price.isEmpty() || store.calculatePriceCategory().equalsIgnoreCase(price);
+                
+                if (matchesDistance && matchesCategory && matchesStars && matchesPrice) {
+                    result.add(store);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Ανάκτηση διαθέσιμων προϊόντων για ένα συγκεκριμένο κατάστημα
+     * 
+     * @param storeName Το όνομα του καταστήματος
+     * @return Λίστα με τα διαθέσιμα προϊόντα
+     */
+    private ArrayList<Product> fetchAvailableProducts(String storeName) {
+        ArrayList<Product> available = new ArrayList<>();
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                if (store.getStoreName().equalsIgnoreCase(storeName)) {
+                    for (Product product : store.getProducts()) {
+                        if (product.getStatus().equalsIgnoreCase("visible") && product.getQuantity() > 0) {
+                            available.add(product);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        
+        return available;
+    }
+    
+    /**
+     * Επεξεργασία αγοράς
+     * 
+     * @param purchase Το αντικείμενο αγοράς
+     */
+    private void processPurchase(Purchase purchase) throws IOException {
+        ArrayList<Product> requestedProducts = purchase.getPurchasedProducts();
+        boolean storeFound = false;
+        String storeName = "";
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                Map<String, Product> storeProductMap = new HashMap<>();
+                for (Product p : store.getProducts()) {
+                    storeProductMap.put(p.getName().toLowerCase(), p);
+                }
+                
+                boolean allMatch = true;
+                for (Product req : requestedProducts) {
+                    Product available = storeProductMap.get(req.getName().toLowerCase());
+                    if (available == null || available.getQuantity() < req.getQuantity() || 
+                        !available.getStatus().equalsIgnoreCase("visible")) {
+                        allMatch = false;
+                        break;
+                    }
+                }
+                
+                if (allMatch) {
+                    for (Product req : requestedProducts) {
+                        Product prod = storeProductMap.get(req.getName().toLowerCase());
+                        prod.setQuantity(prod.getQuantity() - req.getQuantity());
+                        
+                        // Συμπλήρωση κατηγορίας/τιμής (άδεια από τον client)
+                        req.setCategory(prod.getCategory());
+                        req.setPrice(prod.getPrice());
+                    }
+                    
+                    store.getPurchases().add(purchase);
+                    storeName = store.getStoreName();
+                    storeFound = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!storeFound) {
+            out.writeObject("Purchase failed: No store has all requested items in sufficient quantity.");
+        } else {
+            out.writeObject("Purchase completed successfully at store: " + storeName);
+        }
+        
+        out.flush();
+    }
+    
+    /**
+     * Επεξεργασία αξιολόγησης καταστήματος
+     * 
+     * @param storeName Το όνομα του καταστήματος
+     * @param rating Η αξιολόγηση (1-5)
+     */
+    private void processRating(String storeName, int rating) throws IOException {
+        boolean storeFound = false;
+        
+        synchronized (lock) {
+            for (Store store : stores) {
+                if (store.getStoreName().equalsIgnoreCase(storeName)) {
+                    int oldStars = store.getStars();
+                    int oldReviews = store.getNoOfReviews();
+                    
+                    int newReviews = oldReviews + 1;
+                    int newAvg = (int) Math.round((oldStars * oldReviews + rating) / (double) newReviews);
+                    
+                    store.setStars(newAvg);
+                    store.setNoOfReviews(newReviews);
+                    
+                    storeFound = true;
+                    break;
+                }
+            }
+        }
+        
+        if (storeFound) {
+            out.writeObject("Rating submitted successfully.");
+        } else {
+            out.writeObject("Store not found.");
+        }
+        
+        out.flush();
     }
 }
